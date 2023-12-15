@@ -1,50 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, LogBox, ActivityIndicator } from 'react-native';
 import { Audio } from 'expo-av';
-import Slider from '@react-native-community/slider';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons'; // Adjust based on the actual icon pack you are using
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Card, Title, Paragraph, IconButton } from 'react-native-paper';
 
-// Define your styles
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    marginTop: 40,
-    paddingHorizontal: 20,
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 20,
-  },
-  playingText: {
-    marginTop: 20,
-  },
-  transportButtonsContainer: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-  },
-  transportButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  }
-});
-
-const buttonStyles = StyleSheet.create({
-  button: {
-    backgroundColor: '#3498db', // Change background color
-    height: 50, // Change height
-    borderWidth: 2, // Change border width
-    borderColor: '#2980b9', // Change border color
-    borderRadius: 8, // Add border radius for rounded corners
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#ffffff', // Change text color
-    fontSize: 16, // Change text size
-  },
-});
+LogBox.ignoreLogs(['Warning: ...']); // Ignore log notification by message
 
 const App = () => {
   const [sound, setSound] = useState(null);
@@ -52,55 +12,82 @@ const App = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [shuffleList, setShuffleList] = useState([]);
   const [shuffleIndex, setShuffleIndex] = useState(0);
+  const [nowPlayingText, setNowPlayingText] = useState('');
+  const [lastClickedStationIndex, setLastClickedStationIndex] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const stations = [
     'CKDU',
-    'CMHA',
     'CJLO',
-    'CKUT',
-    'CiTR',
     'WNYC',
     'WFMU',
     'KEXP',
     'KCRW',
     'NTS'
-    // Add more station names as needed
   ];
 
   const streamURLs = {
-    QCCR: "http://us3.streamingpulse.com:8074/stream?type=http&nocache=2864",
     CKDU: "https://archive1.ckdu.ca:9750/ckdu_1_on_air_low.mp3",
     CJLO: "http://rosetta.shoutca.st:8883/stream",
-    CITR: "http://live.citr.ca:8000/live.mp3",
-    CHMA: "http://chma-nicecast.mta.ca:8000/listen",
+    WNYC: "http://fm939.wnyc.org/wnycfm.aac",
+    WFMU: "http://stream0.wfmu.org/do-or-diy",
     KEXP: "http://live-mp3-128.kexp.org/kexp128.mp3",
     KCRW: "http://kcrw.streamguys1.com/kcrw_192k_mp3_e24_internet_radio",
-    WFMU: "http://stream0.wfmu.org/do-or-diy",
-    WNYC: "http://fm939.wnyc.org/wnycfm.aac",
     NTS:  "http://stream-relay-geo.ntslive.net/stream",
   };
+
+  useEffect(() => {
+    // Load the blank image on page load
+    setLastClickedStationIndex(null);
+  }, []);
 
   const playAudio = async (stationIndex) => {
     const station = stations[stationIndex];
     const streamURL = streamURLs[station];
-
-    if (!streamURL || currentStationIndex === stationIndex) return;
-
+  
+    if (!streamURL) return;
+  
     try {
+      setLoading(true); // Start loading indicator
+  
       if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
+        // If the same station is clicked, toggle play/pause
+        if (currentStationIndex === stationIndex) {
+          if (isPlaying) {
+            await sound.pauseAsync();
+          } else {
+            await sound.playAsync();
+          }
+          setIsPlaying(!isPlaying);
+        } else {
+          // If a different station is clicked, stop current and play new
+          await sound.stopAsync();
+          await sound.unloadAsync();
+          setSound(null);
+          const newSound = new Audio.Sound();
+          await newSound.loadAsync({ uri: streamURL });
+          setSound(newSound);
+          setCurrentStationIndex(stationIndex);
+          setIsPlaying(true);
+          setNowPlayingText(station);
+          setLastClickedStationIndex(stationIndex);
+          await newSound.playAsync();
+        }
+      } else {
+        // If there is no sound, load and play
+        const newSound = new Audio.Sound();
+        await newSound.loadAsync({ uri: streamURL });
+        setSound(newSound);
+        setCurrentStationIndex(stationIndex);
+        setIsPlaying(true);
+        setNowPlayingText(station);
+        setLastClickedStationIndex(stationIndex);
+        await newSound.playAsync();
       }
-
-      const newSound = new Audio.Sound();
-      await newSound.loadAsync({ uri: streamURL });
-      setSound(newSound);
-      setCurrentStationIndex(stationIndex);
-      setIsPlaying(true);
-      await newSound.playAsync();
     } catch (error) {
-      console.error('Error playing sound:', error);
+      console.error('Error playing/pausing sound:', error);
+    } finally {
+      setLoading(false); // Stop loading indicator
     }
   };
 
@@ -145,51 +132,187 @@ const App = () => {
     };
   }, []);
 
-  
   return (
-    <View style={{ flex: 1, marginTop: 40, paddingHorizontal: 20 }}>
-      <Text style={{ fontSize: 24, marginBottom: 20 }}>Internet Radio</Text>
-      
-      {/* List of station buttons */}
-      {stations.map((station, index) => (
-        <Button key={index} title={station} onPress={() => playAudio(index)} />
-      ))}
-  
-      {/* Space to display currently playing station */}
-      <Text style={{ marginTop: 20 }}>
-        {isPlaying ? `Now playing: ${stations[currentStationIndex]}` : ''}
-      </Text>
-  
-      {/* Fixed container for transport buttons and slider */}
-      <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20 }}>
-        {/* Transport buttons with icons */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Icon name="previous" size={40} onPress={previousAudio} />
-          <Icon name={isPlaying ? "pause" : "play"} size={40} onPress={isPlaying ? stopAudio : () => playAudio(currentStationIndex)} />
-          <Icon name="next" size={40} onPress={nextAudio} />
-          <Icon name="shuffle" size={40} onPress={shuffle} />
-        </View>
-  
-        {/* Volume Slider Container */}
-        {/* <View style={{ transform: [{ scaleX: -1 }] }}> */}
-          {/* Volume Slider */}
-          {/* <Slider
-            style={{ width: '100%', height: 40, transform: [{ scaleX: -1 }] }} // Flip the slider
-            minimumValue={0}
-            maximumValue={1}
-            minimumTrackTintColor="#FFFFFF"
-            maximumTrackTintColor="#000000"
-            value={0.5} // Set initial value to the midpoint
-            onValueChange={(value) => {
-              if (sound) {
-                sound.setVolumeAsync(1 - value); // Invert the value to control the volume
-              }
-            }}
+    <View style={styles.container}>
+      <Card style={styles.card}>
+        {/* <Card.Content>
+          <Image
+            source={
+              lastClickedStationIndex !== null && stations[lastClickedStationIndex]
+                ? require(`./media/${stations[lastClickedStationIndex].toLowerCase()}.png`)
+                : require('./media/blank.png')
+            }
+            style={styles.stationImage}
           />
-        </View> */}
-      </View>
+          <Title>Now playing</Title>
+          <Paragraph style={styles.nowPlayingText}>
+            {lastClickedStationIndex !== null
+              ? stations[lastClickedStationIndex]
+              : 'Select a station to play'}
+          </Paragraph>
+        </Card.Content> */}
+        <Card.Content>
+  <View style={{ position: 'relative', alignItems: 'center' }}>
+    {/* Image component */}
+    <Image
+      source={
+        lastClickedStationIndex !== null && stations[lastClickedStationIndex]
+          ? require(`./media/${stations[lastClickedStationIndex].toLowerCase()}.png`)
+          : require('./media/blank.png')
+      }
+      style={styles.stationImage}
+    />
+
+    {/* ActivityIndicator component */}
+    {loading && (
+      <ActivityIndicator
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1,
+        }}
+        size="large"
+        color="#CCCCCC"
+        animating={loading}
+      />
+    )}
+
+    {/* Other content */}
+    <Title>Now playing</Title>
+    <Paragraph style={styles.nowPlayingText}>
+      {lastClickedStationIndex !== null
+        ? stations[lastClickedStationIndex]
+        : 'Select a station to play'}
+    </Paragraph>
+  </View>
+</Card.Content>
+<Card.Actions style={styles.transportButtonsContainer}>
+  <IconButton icon="skip-previous" onPress={previousAudio} style={styles.transportButton} />
+  <IconButton
+    icon={isPlaying ? 'pause' : 'play'}
+    onPress={() => playAudio(currentStationIndex)}
+    style={styles.transportButton}
+  />
+  <IconButton icon="skip-next" onPress={nextAudio} style={styles.transportButton} />
+</Card.Actions>
+      </Card>
+
+      {stations.map((station, index) => (
+        <TouchableOpacity
+          key={index}
+          style={styles.stationButton}
+          onPress={() => playAudio(index)}
+        >
+          <Text style={styles.stationButtonText}>{station}</Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
-  };
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    marginTop: 10, // Reduced marginTop
+    paddingHorizontal: 20,
+  },
+  card: {
+    marginBottom: 10,
+  },
+  stationImage: {
+    width: '100%',
+    height: 200,
+    resizeMode: 'cover',
+  },
+  stationButton: {
+    backgroundColor: 'darkgrey',
+    width: '100%',
+    height: 60,
+    marginBottom: 5, // Reduced marginBottom
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stationButtonText: {
+    fontSize: 20,
+    color: '#ffffff',
+  },
+  nowPlayingText: {
+    fontSize: 24,
+    marginTop: 10, // Adjusted marginTop
+    fontWeight: 'bold',
+  },
+  transportButtonsContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+  },
+  transportButton: {
+    backgroundColor: 'rgb(231, 224, 236)',
+    width: 40,
+    height: 40,
+    borderWidth: 2,
+    borderRadius: 20,
+    borderColor: 'rgb(121, 116, 126)',
+    marginHorizontal: 5, // Adjust horizontal margin as needed
+    overflow: 'hidden', // Ensure content does not overflow
+  },
+
+  audioInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start', // Align items to the start (left)
+  },
   
-  export default App;
+  textContainer: {
+    marginLeft: 10,
+    alignSelf: 'flex-start', // Align self to the start (left)
+  },
+  
+  transportButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center', // Center the buttons horizontally
+    marginTop: 10, // Add some margin to the top
+    alignSelf: 'center',
+  },
+});
+
+// const styles = StyleSheet.create({
+//   container: {
+//     flex: 1,
+//     marginTop: 40,
+//     paddingHorizontal: 20,
+//   },
+//   card: {
+//     marginBottom: 10,
+//   },
+//   stationImage: {
+//     width: '100%',
+//     height: 200,
+//     resizeMode: 'cover',
+//   },
+//   stationButton: {
+//     backgroundColor: 'darkgrey',
+//     width: '100%',
+//     height: 60,
+//     marginBottom: 10,
+//     borderRadius: 8,
+//     alignItems: 'center',
+//     justifyContent: 'center',
+//   },
+//   stationButtonText: {
+//     fontSize: 20,
+//     color: '#ffffff',
+//   },
+//   nowPlayingText: {
+//     fontSize: 24,
+//     marginTop: 20,
+//     fontWeight: 'bold',
+//   },
+// });
+
+export default App;
+
