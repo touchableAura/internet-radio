@@ -1,6 +1,8 @@
 This React Native App is an online radio interface for 7 of my most listened to online radio stations. It's basically a simplified way for me to get something closer to an actual radio interface. This allowed me to program the buttons to station I like in a way that wasn't available with other online radios or physical radios.
 
-INSTRUCTIONS FOR WINDOWS 
+**********************************
+**** INSTRUCTIONS FOR WINDOWS **** 
+**********************************
 
 note: if you are on a mac/ different os, you may need to look up the keyboard shortcut/ terminal input alternatives for things to work properly.
 
